@@ -7,10 +7,14 @@
 ---
 ## 快速下载安装
 ```
+## 需要bash环境，如果是openwrt，那么先装依赖
+## opkg update
+## opkg install bash bind-dig openssl-util coreutils-sha256sum
 mkdir -p /opt/acme
 cd /opt/acme
 wget -O /opt/acme/acme-mgr.sh https://raw.githubusercontent.com/cn4096/acme-mgr.sh/main/acme-mgr.sh  
 chmod +x /opt/acme/acme-mgr.sh
+./acme-mgr.sh check
 
 ## 修改 域名信息
 #vim acme-mgr.sh
