@@ -303,6 +303,11 @@ server {
     server_name example.com *.example.com;
     ssl_certificate     /etc/nginx/ssl/example.com.crt;
     ssl_certificate_key /etc/nginx/ssl/example.com.key;
+
+    # http自动转https, 关键：用 $http_host 保留客户端访问的端口 9999
+    error_page 497 =301 https://$http_host$request_uri;
+    # nginx 自身产生的跳转（如目录补斜杠）也别带上 443
+    absolute_redirect off;
 }
 ```
 
