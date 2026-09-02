@@ -26,6 +26,10 @@ NGINX_CONF_OUT="/opt/docker-data/nginx/conf.d/acme-ssl.conf"
 
 ACME_IMAGE="neilpang/acme.sh"
 DNSSLEEP=120
+
+# acme.sh 容器内自动升级: 0=关闭(推荐) 1=开启
+# 容器是 --rm 的, 升级产物不持久化, 开启只会每次 cron 都重新从 GitHub 下载一遍
+AUTO_UPGRADE="0"
 # ================== 配置区结束 ==================
 
 set -uo pipefail
@@ -101,6 +105,18 @@ targets() {
   if [ $# -gt 0 ]; then echo "$*"; else echo "$DOMAINS"; fi
 }
 
+# 写入单个域名的 AUTO_UPGRADE
+_set_upgrade_one() {
+  local d="$1" v="$2" f="$DATA_DIR/$d/account.conf"
+  [ -d "$DATA_DIR/$d" ] || return 1
+  [ -f "$f" ] || : > "$f"
+  if grep -q '^AUTO_UPGRADE=' "$f" 2>/dev/null; then
+    sed -i "s/^AUTO_UPGRADE=.*/AUTO_UPGRADE='$v'/" "$f"
+  else
+    echo "AUTO_UPGRADE='$v'" >> "$f"
+  fi
+}
+
 # ------------------------------------------------------------
 cmd_init() {
   need_docker; write_env
@@ -110,8 +126,42 @@ cmd_init() {
     hr "init $d"
     mkdir -p "$DATA_DIR/$d"
     acme_run "$d" --set-default-ca --server letsencrypt
+    _set_upgrade_one "$d" "$AUTO_UPGRADE" \
+      && echo "AUTO_UPGRADE=$AUTO_UPGRADE"
   done
   ok "初始化完成"
+}
+
+cmd_upgrade() {
+  local v="${1:-}"
+  case "$v" in
+    off|0) v=0 ;;
+    on|1)  v=1 ;;
+    ""|status)
+      printf '%-26s %s\n' "域名" "AUTO_UPGRADE"
+      for d in $DOMAINS; do
+        local cur
+        cur=$(grep '^AUTO_UPGRADE=' "$DATA_DIR/$d/account.conf" 2>/dev/null \
+              | head -1 | sed "s/.*='\?\([01]\)'\?.*/\1/")
+        case "$cur" in
+          0) printf "${C_G}%-26s %s${C_0}\n" "$d" "0 (已关闭)" ;;
+          1) printf "${C_Y}%-26s %s${C_0}\n" "$d" "1 (开启, 每次 cron 会联网下载)" ;;
+          *) printf "${C_Y}%-26s %s${C_0}\n" "$d" "未设置 (镜像默认为 1)" ;;
+        esac
+      done
+      echo
+      echo "用法: $0 upgrade off|on   (配置区 AUTO_UPGRADE=$AUTO_UPGRADE)"
+      return 0 ;;
+    *) err "用法: $0 upgrade [off|on|status]"; return 1 ;;
+  esac
+  [ $# -gt 0 ] && shift
+  for d in $(targets "$@"); do
+    if _set_upgrade_one "$d" "$v"; then
+      ok "$d -> AUTO_UPGRADE='$v'"
+    else
+      warn "$d 数据目录不存在, 跳过"
+    fi
+  done
 }
 
 _issue() {
@@ -305,7 +355,12 @@ usage() {
 
   list      显示当前配置
   deps      只检查工具依赖
-  init      拉镜像、建目录、设默认 CA
+  init      拉镜像、建目录、设默认 CA、写入 AUTO_UPGRADE
+  upgrade   查看/设置容器内 acme.sh 自动升级
+              upgrade          查看各域名当前状态
+              upgrade off      关闭(推荐)
+              upgrade on       开启
+              upgrade off <域名>  只改指定域名
   staging   用测试 CA 签发(首次会失败并输出需添加的 CNAME)
   cname     核对 DNS 上的 CNAME 与本地注册是否一致
   prod      用正式 CA 签发
@@ -329,6 +384,7 @@ case "$CMD" in
   list)    cmd_list ;;
   deps)    cmd_deps ;;
   init)    cmd_init "$@" ;;
+  upgrade) cmd_upgrade "$@" ;;
   staging) cmd_staging "$@" ;;
   prod)    cmd_prod "$@" ;;
   cname)   cmd_cname "$@" ;;
