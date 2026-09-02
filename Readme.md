@@ -5,7 +5,17 @@
 **服务器上不存放任何 DNS 服务商 API 密钥**，通过 CNAME 委托完成 ACME DNS-01 验证。适用于 80/443 端口不可用、需要泛域名、或不愿把 DNS API Key 放在机器上的场景。
 
 ---
+## 快速下载安装
+```
+mkdir -p /opt/acme
+cd /opt/acme
+wget -O /opt/acme/acme-mgr.sh https://raw.githubusercontent.com/cn4096/acme-mgr.sh/main/acme-mgr.sh  
+chmod +x /opt/acme/acme-mgr.sh
 
+## 修改 域名信息
+#vim acme-mgr.sh
+
+```
 ## 特性
 
 - 一个脚本管理多个层级的泛域名证书，配置集中在文件头部
